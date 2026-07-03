@@ -214,3 +214,8 @@ Para evaluar los factores asociados al fraude en transacciones con tarjetas de c
 | **Fraud Rate por Número de Tarjetas** | Tasa de fraude según la cantidad de tarjetas asociadas al usuario. | Analizar si el número de tarjetas influye en el riesgo de fraude. |
 | **Fraud Rate por Errores de Transacción** | Tasa de fraude en transacciones con y sin errores registrados. | Evaluar si los errores técnicos están relacionados con actividades fraudulentas. |
 | **Top Comercios con Mayor Monto Fraudulento** | Ranking de comercios con mayor monto acumulado en transacciones fraudulentas. | Identificar establecimientos con mayor exposición al fraude. |
+
+
+```sql
+SELECT*
+FROM
