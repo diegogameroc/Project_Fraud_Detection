@@ -219,3 +219,19 @@ Para evaluar los factores asociados al fraude en transacciones con tarjetas de c
 ```sql
 SELECT*
 FROM
+```
+
+## 🛒 Top categorías comerciales con mayor tasa de fraude (MCC)
+
+| MCC  | Categoría comercial | Fraud Rate |
+|------|---------------------|-----------:|
+| 5045 | Computadoras, periféricos y software | 9.38% |
+| 5732 | Tiendas de electrónica | 6.69% |
+| 5094 | Joyerías y metales preciosos | 6.00% |
+| 5816 | Productos digitales (apps, juegos, contenido digital) | 5.96% |
+| 5712 | Muebles y artículos para el hogar | 5.85% |
+| 5932 | Tiendas de antigüedades | 1.52% |
+| 7996 | Parques de diversiones y atracciones | 1.43% |
+| 5193 | Suministros de oficina | 1.23% |
+| 4722 | Agencias de viaje | 0.69% |
+| 5311 | Grandes almacenes (Department Stores) | 0.54% |
