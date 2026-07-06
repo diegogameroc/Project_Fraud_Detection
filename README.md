@@ -188,7 +188,7 @@ Antes de realizar el análisis exploratorio, se preparó la base de datos para g
 
 Como resultado de esta fase, se obtuvo una base de datos consistente y preparada para el análisis exploratorio, garantizando que las consultas posteriores se realizaran sobre información limpia y estructurada.
 
-# 📊 Fase 2: Análisis Exploratorio de Datos (EDA)
+# 📊 Fase 3: Análisis del Riesgo de Fraude
 
 ### 📌 Fórmula utilizada
 

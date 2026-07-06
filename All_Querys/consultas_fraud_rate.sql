@@ -242,4 +242,89 @@ FROM CTE_BASE
 GROUP BY Segmento_Credito
 ORDER BY Fraud_Rate DESC
  
+--8. ¿Las transacciones que presentan errores tienen una mayor tasa de fraude que las que no presentan errores?
+
+USE Credit_Card
+
+SELECT TOP 5 *
+FROM dbo.Transacciones_Tarjetas
+
+
+WITH CTE_BASE AS (
+    SELECT
+    	Errors,
+        CASE 
+            WHEN Is_Fraud = 'Yes' THEN 1
+            ELSE 0
+        END AS Fraud_Flag
+    FROM dbo.Transacciones_Tarjetas
+)
+
+SELECT 
+Errors,
+COUNT(1) AS Total_Transactions,
+SUM(Fraud_Flag) AS Cant_Fraud,
+ROUND(SUM(Fraud_Flag)*100.00/COUNT(1),4) AS Fraud_Rate
+FROM CTE_BASE
+WHERE Errors is not NULL 
+GROUP BY Errors
+HAVING COUNT(1)>1000
+ORDER BY Fraud_Rate DESC
+
+
+--9. ¿Cómo varía la tasa de fraude según el número de tarjetas que posee un usuario?
+
+WITH CTE_BASE AS (
+    SELECT
+        CASE
+            WHEN us.Num_Credit_Cards >= 6 THEN '6+ Tarjetas'
+            WHEN us.Num_Credit_Cards = 5 THEN '5 Tarjetas'
+            WHEN us.Num_Credit_Cards = 4 THEN '4 Tarjetas'
+            WHEN us.Num_Credit_Cards = 3 THEN '3 Tarjetas'
+            WHEN us.Num_Credit_Cards = 2 THEN '2 Tarjetas'
+            ELSE '1 Tarjeta'
+        END AS Segmento_Tarjetas,
+        
+        CASE
+            WHEN t.Is_Fraud = 'Yes' THEN 1
+            ELSE 0
+        END AS Fraud_Flag
+        
+    FROM dbo.Transacciones_Tarjetas AS t
+    INNER JOIN dbo.Datos_Usuarios AS us
+        ON t.User_ID = us.User_ID
+)
+
+SELECT
+    Segmento_Tarjetas,
+    COUNT(*) AS Total_Transactions,
+    SUM(Fraud_Flag) AS Cant_Fraud,
+    ROUND(SUM(Fraud_Flag) * 100.0 / COUNT(*), 4) AS Fraud_Rate
+FROM CTE_BASE
+GROUP BY Segmento_Tarjetas
+ORDER BY Fraud_Rate DESC
+
+
+
+
+WITH CTE_BASE AS (
+    SELECT
+        Transaction_Year,
+        Transaction_Month,
+        CASE 
+            WHEN Is_Fraud = 'Yes' THEN 1
+            ELSE 0
+        END AS Fraud_Flag
+    FROM dbo.Transacciones_Tarjetas
+)
+
+SELECT
+    Transaction_Year,
+    Transaction_Month,
+    COUNT(1) AS Total_Transactions,
+    SUM(Fraud_Flag) AS Cant_Fraud,
+    ROUND(SUM(Fraud_Flag) * 100.0 / COUNT(1), 4) AS Fraud_Rate
+FROM CTE_BASE
+GROUP BY Transaction_Year, Transaction_Month
+ORDER BY Transaction_Year, Transaction_Month;
 
