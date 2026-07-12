@@ -426,7 +426,7 @@ FROM CTE_FRAUD
 ORDER BY Risk_Ratio DESC;
 ```
 
-![Fraud Rate online](Picture/Risk_Ratio.png)
+![Fraud Rate online](Picture/risk_ratio.png)
 
 **Hallazgo:** las transacciones online tienen un Fraud Rate casi 9 veces mayor que las de chip, a pesar de representar solo el 11% del volumen total. Swipe, en cambio, es el canal más seguro en términos relativos, incluso por debajo de chip.
 
@@ -497,7 +497,7 @@ HAVING COUNT(1) >= 50000
 ORDER BY Fraud_Rate DESC;
 ```
 
-![Fraud Rate estado](Picture/Fraud_Rate_estado.png)
+![Fraud Rate estado](Picture/Fraud_Rate_Estado.png)
 
 **Hallazgo:** South Dakota, Hawái y Oregon concentran la mayor tasa de fraude, prácticamente el doble del promedio general (0.12%). Los estados con mayor volumen de transacciones (CA, TX, FL, NY) se ubican en un rango medio-bajo, sin destacar como focos de riesgo.
 
@@ -529,7 +529,7 @@ HAVING COUNT(1) >= 5000
 ORDER BY Fraud_Rate DESC;
 ```
 
-![Fraud Rate MCC](Picture/Fraud_Rate_mcc.png)
+![Fraud Rate MCC](Picture/fraud_Rate_mcc.png)
 
 **MCC con mayor tasa de fraude:**
 
