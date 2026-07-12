@@ -305,8 +305,6 @@ GROUP BY Segmento_Tarjetas
 ORDER BY Fraud_Rate DESC
 
 
-
-
 WITH CTE_BASE AS (
     SELECT
         Transaction_Year,
@@ -327,4 +325,40 @@ SELECT
 FROM CTE_BASE
 GROUP BY Transaction_Year, Transaction_Month
 ORDER BY Transaction_Year, Transaction_Month;
+
+-----------Detector de fraude
+WITH CTE_Flags AS (
+    SELECT
+        t.User_ID,
+        t.Card,
+        t.Amount,
+        t.Use_Chip,
+        t.Errors,
+        t.Is_Fraud,
+        d.FICO_Score,
+
+        -- Señal 1: Transacción Online
+        CASE WHEN t.Use_Chip = 'Online Transaction' THEN 1 ELSE 0 END AS Flag_Online,
+
+        -- Señal 2: Monto alto, "Gasto Fuerte" 
+        CASE WHEN ROUND(CAST(REPLACE(t.Amount,'$','') AS FLOAT),2) > 600 THEN 1 ELSE 0 END AS Flag_Monto_Alto,
+
+        -- Señal 3: Transacción con error registrado
+        CASE WHEN t.Errors IS NOT NULL THEN 1 ELSE 0 END AS Flag_Error,
+
+        -- Señal 4: Usuario con FICO Score bajo (< 650, "Riesgo Alto")
+        CASE WHEN d.FICO_Score < 650 THEN 1 ELSE 0 END AS Flag_Fico_Bajo
+
+    FROM dbo.Transacciones_Tarjetas t
+    INNER JOIN dbo.Datos_Usuarios d
+        ON t.User_ID = d.User_ID
+),
+
+CTE_Score AS (
+    SELECT
+        *,
+        (Flag_Online + Flag_Monto_Alto + Flag_Error + Flag_Fico_Bajo) AS Risk_Score
+    FROM CTE_Flags
+)
+
 
