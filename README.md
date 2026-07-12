@@ -32,6 +32,7 @@ Identificar patrones asociados al fraude en transacciones con tarjetas de crédi
 - Identificar perfiles de usuarios con mayor riesgo.
 - Evaluar el impacto del uso del chip en el fraude.
 - Analizar el comportamiento por marca y tipo de tarjeta.
+- Construir un indicador de riesgo (Risk Score) que combine las señales más relevantes.
 - Obtener insights que apoyen la toma de decisiones.
 
 ---
@@ -711,7 +712,8 @@ ORDER BY Fraud_Rate DESC
 
 ## 🎯 Fase 4: Construcción de un Risk Score
 
-Construí un Risk Score sumando 4 señales de riesgo ya validadas en las preguntas anteriores (transacción online, monto alto, error crítico y límite de crédito bajo), usando CASE, CTEs encadenados y GROUP BY. Cada señal suma 1 punto, dando un score de 0 a 4.
+Construí el score sumando 6 señales de riesgo ya validadas en el análisis anterior: transacción online, monto alto, MCC de alto riesgo, límite de crédito bajo, error crítico de tarjeta y usuario con 5 o más tarjetas. Cada señal suma 1 punto, dando un score de 0 a 6 puntos por transacción. En la práctica, ninguna transacción del dataset acumuló las 6 señales a la vez — el score máximo observado fue 5.
+
 
 ```sql
 WITH CTE_Flags AS (
@@ -721,24 +723,30 @@ WITH CTE_Flags AS (
         t.Amount,
         t.Use_Chip,
         t.Errors,
+        t.MCC,
         t.Is_Fraud,
         tu.Credit_Limit,
+        us.Num_Credit_Cards,
 
         CASE WHEN t.Use_Chip = 'Online Transaction' THEN 1 ELSE 0 END AS Flag_Online,
         CASE WHEN ROUND(CAST(REPLACE(t.Amount,'$','') AS FLOAT),2) > 600 THEN 1 ELSE 0 END AS Flag_Monto_Alto,
         CASE WHEN t.Errors IN ('Bad CVV','Bad Expiration','Bad Card Number','Bad PIN') THEN 1 ELSE 0 END AS Flag_Error_Critico,
-        CASE WHEN CAST(REPLACE(tu.Credit_Limit,'$','') AS FLOAT) < 7043 THEN 1 ELSE 0 END AS Flag_Limite_Bajo
+        CASE WHEN CAST(REPLACE(tu.Credit_Limit,'$','') AS FLOAT) < 7043 THEN 1 ELSE 0 END AS Flag_Limite_Bajo,
+        CASE WHEN t.MCC IN (5045,5732,5094,5816,5712) THEN 1 ELSE 0 END AS Flag_MCC_Riesgo,
+        CASE WHEN us.Num_Credit_Cards >= 5 THEN 1 ELSE 0 END AS Flag_Muchas_Tarjetas
 
     FROM dbo.Transacciones_Tarjetas t
     INNER JOIN dbo.Tarjetas_Usuarios tu
         ON t.User_ID = tu.User_ID
        AND t.Card = tu.Card_Index
+    INNER JOIN dbo.Datos_Usuarios us
+        ON t.User_ID = us.User_ID
 ),
 
 CTE_Score AS (
     SELECT
         *,
-        (Flag_Online + Flag_Monto_Alto + Flag_Error_Critico + Flag_Limite_Bajo) AS Risk_Score
+        (Flag_Online + Flag_Monto_Alto + Flag_Error_Critico + Flag_Limite_Bajo + Flag_MCC_Riesgo + Flag_Muchas_Tarjetas) AS Risk_Score
     FROM CTE_Flags
 )
 
@@ -754,24 +762,26 @@ ORDER BY Risk_Score DESC;
 
 ![Fraud Rate RiskScore](Picture/Risk_Score_Fraud_Detection.png)
 
-**Hallazgo:** el Fraud Rate sube de forma constante con el Risk Score. Las transacciones con las 4 señales presentes tienen una tasa de fraude de 9.09%, casi 190 veces superior a las que no tienen ninguna señal (0.05%). El salto más marcado ocurre entre score 2 y score 3, donde la tasa pasa de 0.86% a 2.79%.
+**Hallazgo:** el Fraud Rate sube de forma constante y muy marcada con el Risk Score. Las transacciones con 5 señales presentes tienen una tasa de fraude de 41.18%, más de 1,000 veces superior al grupo sin ninguna señal (0.04%). Las transacciones con score 3 o más representan menos del 1% del volumen total, pero concentran cerca del 10% de todo el fraude del dataset.
 
-**Recomendación:** usar este Risk Score para priorizar revisión manual o validación adicional: las transacciones con score 3 o 4 deberían tratarse como de alta prioridad. Como siguiente paso, se podría dar distinto peso a cada señal según su fuerza individual, o incorporar variables de comportamiento del usuario como gasto atípico respecto a su historial o frecuencia de transacciones.
+**Recomendación:** las transacciones con score 4 o 5 deberían bloquearse o requerir verificación inmediata, ya que más del 8% (score 4) y más del 40% (score 5) resultan ser fraude real. Las de score 3 ameritan revisión prioritaria, aunque con menor urgencia. Las de score 0 o 1 no requieren revisión adicional, ya que su tasa de fraude está en línea o por debajo del promedio general.
 
 ---
 
 ## 📌 Conclusiones
 
-Este proyecto analizó más de 24 millones de transacciones con tarjetas de crédito para identificar patrones de fraude y traducirlos en recomendaciones de negocio. Estas son las conclusiones principales:
+Este proyecto analizó más de 24 millones de transacciones con tarjetas de crédito para identificar patrones de fraude y traducirlos en recomendaciones de negocio. Estas son las conclusiones principales, en línea con los objetivos planteados:
 
-**Sobre la tasa de fraude:** el fraude representa solo el 0.12% de las transacciones, pero no se distribuye de forma pareja. Se concentra en segmentos específicos: transacciones online, montos altos, comercios de electrónica y bienes de valor, errores de validación de tarjeta (CVV, número, PIN) y usuarios con más tarjetas o menor límite de crédito.
+**Sobre el comportamiento de las transacciones fraudulentas:** el fraude representa solo el 0.12% del total, pero no se distribuye de forma pareja. Se concentra en segmentos específicos: transacciones online, montos altos, comercios de electrónica y bienes de valor, y errores de validación de tarjeta (CVV, número, PIN).
 
-**Variables que sí predicen fraude:** tipo de transacción, monto, MCC, tipo de error y número de tarjetas mostraron relaciones claras y consistentes con el fraude. El estado geográfico también aporta señal, pero de forma puntual: la mayoría de estados se mueven cerca del promedio general, salvo casos específicos como South Dakota, Hawái y Oregon, que casi duplican la tasa de fraude.
+**Sobre los perfiles de usuario con mayor riesgo:** los usuarios con más tarjetas activas o menor límite de crédito presentan una tasa de fraude más alta. El FICO Score, en cambio, no mostró una relación consistente con el fraude — incluso los usuarios con mejor historial crediticio presentaron una tasa más alta, por lo que no se recomienda como criterio principal para reglas de riesgo.
 
-**Variables que no aportan señal:** el FICO Score no mostró una relación consistente con el fraude — incluso los usuarios con mejor historial crediticio presentaron una tasa más alta, por lo que no se recomienda como criterio principal para reglas de riesgo.
+**Sobre el impacto del chip:** las transacciones online tienen un Fraud Rate casi 9 veces mayor que las realizadas con chip, confirmando que el canal de pago es una de las señales más fuertes del análisis.
 
-**Risk Score:** combinar varias señales de riesgo en un solo indicador funciona mejor que evaluarlas por separado. Las transacciones con más señales presentes concentran una tasa de fraude significativamente más alta que el promedio general, lo que confirma que el fraude responde a la combinación de factores, no a uno solo.
+**Sobre la marca y el tipo de tarjeta:** Discover presenta la tasa de fraude más alta entre las marcas, aunque con menor volumen de transacciones. Mastercard y Visa, con el 90% del volumen total, muestran tasas más bajas y estables.
 
-**Recomendación general:** priorizar controles adicionales (validación extra, revisión manual) en transacciones online, de monto alto, en comercios de alto valor y con errores críticos de tarjeta. Evitar aplicar fricción en los segmentos de bajo riesgo (compras cotidianas, montos bajos), donde agregar controles solo afectaría la experiencia del usuario sin reducir fraude real.
+**Sobre el Risk Score:** combinar 6 señales de riesgo en un solo indicador (transacción online, monto alto, MCC de riesgo, límite de crédito bajo, error crítico y número de tarjetas) mejora notablemente la capacidad de detección frente a evaluar cada variable por separado. Las transacciones con el score más alto (5 señales) presentan una tasa de fraude de 41.18%, más de 1,000 veces superior al grupo sin señales, y concentran cerca del 10% de todo el fraude del dataset en menos del 1% del volumen total.
+
+**Recomendación general:** priorizar controles adicionales (validación extra, revisión manual o bloqueo) en transacciones con score alto, especialmente aquellas online, de monto alto, en comercios de riesgo o con errores críticos de tarjeta. Evitar aplicar fricción en los segmentos de bajo riesgo, donde agregar controles solo afectaría la experiencia del usuario sin reducir fraude real.
 
 **Próximos pasos:** este análisis descriptivo puede evolucionar incorporando variables de comportamiento del usuario (gasto atípico respecto a su historial, frecuencia de transacciones), dashboards en Power BI para monitoreo en tiempo real, y modelos de Machine Learning que aprendan patrones más complejos que las reglas fijas usadas en este proyecto.

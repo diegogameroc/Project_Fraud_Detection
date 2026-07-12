@@ -26,8 +26,6 @@ Total_Transactions,
 ROUND(Cant_Fraud*100.00/Total_Transactions,2) AS Fraud_Rate
 FROM CTE_KPI
 
-
-
 --1.¿Cuál es la tasa de fraude para cada marca de tarjeta (Visa, Mastercard, American Express, etc.)?
 
 WITH CTE_T1 AS (
@@ -162,6 +160,7 @@ SELECT
     ROUND(SUM(Fraud_Flag) * 100.0 / COUNT(*), 4) AS Fraud_Rate
 FROM CTE_BASE
 GROUP BY State
+HAVING COUNT(1) >= 50000
 ORDER BY Fraud_Rate DESC;
 
 -- 5. Fraude por merchant (MCC o tipo de comercio)
@@ -231,7 +230,8 @@ WITH CTE_BASE AS (
         END AS Segmento_Credito
     FROM dbo.Transacciones_Tarjetas t
     INNER JOIN dbo.Tarjetas_Usuarios as tu
-    ON  t.User_ID = tu.User_ID  
+    ON  t.User_ID = tu.User_ID
+    AND t.Card = tu.Card_Index
 )
 SELECT
 Segmento_Credito,
@@ -241,7 +241,7 @@ ROUND(SUM(Fraud_Flag)*100.00/COUNT(1),4) Fraud_Rate
 FROM CTE_BASE
 GROUP BY Segmento_Credito
 ORDER BY Fraud_Rate DESC
- 
+
 --8. ¿Las transacciones que presentan errores tienen una mayor tasa de fraude que las que no presentan errores?
 
 USE Credit_Card
@@ -305,28 +305,7 @@ GROUP BY Segmento_Tarjetas
 ORDER BY Fraud_Rate DESC
 
 
-WITH CTE_BASE AS (
-    SELECT
-        Transaction_Year,
-        Transaction_Month,
-        CASE 
-            WHEN Is_Fraud = 'Yes' THEN 1
-            ELSE 0
-        END AS Fraud_Flag
-    FROM dbo.Transacciones_Tarjetas
-)
-
-SELECT
-    Transaction_Year,
-    Transaction_Month,
-    COUNT(1) AS Total_Transactions,
-    SUM(Fraud_Flag) AS Cant_Fraud,
-    ROUND(SUM(Fraud_Flag) * 100.0 / COUNT(1), 4) AS Fraud_Rate
-FROM CTE_BASE
-GROUP BY Transaction_Year, Transaction_Month
-ORDER BY Transaction_Year, Transaction_Month;
-
------------Detector de fraude
+-----------Detector de fraude con Flags
 WITH CTE_Flags AS (
     SELECT
         t.User_ID,
@@ -334,31 +313,38 @@ WITH CTE_Flags AS (
         t.Amount,
         t.Use_Chip,
         t.Errors,
+        t.MCC,
         t.Is_Fraud,
-        d.FICO_Score,
+        tu.Credit_Limit,
+        us.Num_Credit_Cards,
 
-        -- Señal 1: Transacción Online
         CASE WHEN t.Use_Chip = 'Online Transaction' THEN 1 ELSE 0 END AS Flag_Online,
-
-        -- Señal 2: Monto alto, "Gasto Fuerte" 
         CASE WHEN ROUND(CAST(REPLACE(t.Amount,'$','') AS FLOAT),2) > 600 THEN 1 ELSE 0 END AS Flag_Monto_Alto,
-
-        -- Señal 3: Transacción con error registrado
-        CASE WHEN t.Errors IS NOT NULL THEN 1 ELSE 0 END AS Flag_Error,
-
-        -- Señal 4: Usuario con FICO Score bajo (< 650, "Riesgo Alto")
-        CASE WHEN d.FICO_Score < 650 THEN 1 ELSE 0 END AS Flag_Fico_Bajo
+        CASE WHEN t.Errors IN ('Bad CVV','Bad Expiration','Bad Card Number','Bad PIN') THEN 1 ELSE 0 END AS Flag_Error_Critico,
+        CASE WHEN CAST(REPLACE(tu.Credit_Limit,'$','') AS FLOAT) < 7043 THEN 1 ELSE 0 END AS Flag_Limite_Bajo,
+        CASE WHEN t.MCC IN (5045,5732,5094,5816,5712) THEN 1 ELSE 0 END AS Flag_MCC_Riesgo,
+        CASE WHEN us.Num_Credit_Cards >= 5 THEN 1 ELSE 0 END AS Flag_Muchas_Tarjetas
 
     FROM dbo.Transacciones_Tarjetas t
-    INNER JOIN dbo.Datos_Usuarios d
-        ON t.User_ID = d.User_ID
+    INNER JOIN dbo.Tarjetas_Usuarios tu
+        ON t.User_ID = tu.User_ID
+       AND t.Card = tu.Card_Index
+    INNER JOIN dbo.Datos_Usuarios us
+        ON t.User_ID = us.User_ID
 ),
 
 CTE_Score AS (
     SELECT
         *,
-        (Flag_Online + Flag_Monto_Alto + Flag_Error + Flag_Fico_Bajo) AS Risk_Score
+        (Flag_Online + Flag_Monto_Alto + Flag_Error_Critico + Flag_Limite_Bajo + Flag_MCC_Riesgo + Flag_Muchas_Tarjetas) AS Risk_Score
     FROM CTE_Flags
 )
 
-
+SELECT
+    Risk_Score,
+    COUNT(1) AS Total_Transactions,
+    SUM(CASE WHEN Is_Fraud = 'Yes' THEN 1 ELSE 0 END) AS Cant_Fraud,
+    ROUND(SUM(CASE WHEN Is_Fraud = 'Yes' THEN 1 ELSE 0 END) * 100.0 / COUNT(1), 4) AS Fraud_Rate
+FROM CTE_Score
+GROUP BY Risk_Score
+ORDER BY Risk_Score DESC;
