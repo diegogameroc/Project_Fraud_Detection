@@ -497,7 +497,7 @@ HAVING COUNT(1) >= 50000
 ORDER BY Fraud_Rate DESC;
 ```
 
-![Fraud Rate estado](Picture/Fraud_Rate_Estado.png)
+![Fraud Rate estado](Picture/fraud_Rate_Estado.png)
 
 **Hallazgo:** South Dakota, Hawái y Oregon concentran la mayor tasa de fraude, prácticamente el doble del promedio general (0.12%). Los estados con mayor volumen de transacciones (CA, TX, FL, NY) se ubican en un rango medio-bajo, sin destacar como focos de riesgo.
 
